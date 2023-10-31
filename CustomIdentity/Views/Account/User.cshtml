@@ -1,0 +1,41 @@
+﻿@using CustomIdentity.Models.ViewModels;
+@model List<UserListVM>
+
+<h2>List of Users</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>User ID</th>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Role</th>
+            @if (User.IsInRole(CustomIdentity.Utilities.Helper.Admin) || User.IsInRole(CustomIdentity.Utilities.Helper.SuperAdmin))
+                    {
+            <th>Actions</th>
+                    }
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var user in Model)
+        {
+            <tr>
+                <td>@user.UserId</td>
+                <td>@user.UserName</td>
+                <td>@user.Email</td>
+                <td>@string.Join(", ", user.Roles)</td>
+                <td>
+                    @if (User.IsInRole(CustomIdentity.Utilities.Helper.Admin) || User.IsInRole(CustomIdentity.Utilities.Helper.SuperAdmin))
+                    {
+                        <a asp-action="ManageUserRole" asp-controller="Role" asp-route-id="@user.UserId" class="btn btn-secondary">Manage Roles</a>
+                        <span>|</span>
+                        <a asp-action="EditUser" asp-route-id="@user.UserId" class="btn btn-info">Edit</a> <span>|</span>
+                        <a asp-action="DeleteUser" asp-route-Id="@user.UserId" class="btn btn-danger text-white">
+                            Delete
+                        </a>
+                    }
+
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
