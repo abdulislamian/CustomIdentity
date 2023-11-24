@@ -2,87 +2,70 @@ using CustomIdentity.Data;
 using CustomIdentity.Repository;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using System.Net.Mail;
-using System.Net;
 using CustomIdentity.Models;
-using Microsoft.Extensions.Configuration;
+using CustomIdentity.Models.PermissionModel;
+using Microsoft.AspNetCore.Authorization;
+using AspNetCoreHero.ToastNotification;
+using AspNetCoreHero.ToastNotification.Extensions;
+using CustomIdentity.Utilities;
+using Microsoft.AspNetCore.Mvc;
 
-var builder = WebApplication.CreateBuilder(args);
-
-// Add services to the container.
-builder.Services.AddControllersWithViews();
-builder.Services.AddMvc().AddRazorRuntimeCompilation();
-
-builder.Services.AddDbContext<ApplicationDbContext>
-    (Options => Options.UseSqlServer
-    (builder.Configuration.GetConnectionString("DefaultConnection")));
-
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>().AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddTokenProvider<DataProtectorTokenProvider<ApplicationUser>>(TokenOptions.DefaultProvider); ;
-
-//builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = true)
-//                .AddEntityFrameworkStores<ApplicationDbContext>()
-//                .AddTokenProvider<DataProtectorTokenProvider<ApplicationUser>>(TokenOptions.DefaultProvider);
-builder.Services.AddAuthorization(options =>
+internal class Program
 {
-    options.AddPolicy("FullAdminAccess", policy => policy.RequireRole("SuperAdmin"));
-    options.AddPolicy("AdminAccess", policy => policy.RequireRole("Admin","SuperAdmin"));
-    options.AddPolicy("UserAccess", policy => policy.RequireRole("User"));
-});
-
-builder.Services.AddAuthorization(options => {
-    options.AddPolicy("SuperUserRights", policy => policy.RequireRole("User"));
-});
-
-
-builder.Services.AddSingleton<IEmailService, SmtpEmailService>(provider =>
-{
-    var smtpClient = new SmtpClient
+    private static async Task Main(string[] args)
     {
-        Host = builder.Configuration["EmailSettings:SmtpServer"],
-        Port = int.Parse(builder.Configuration["EmailSettings:SmtpPort"]),
-        Credentials = new NetworkCredential(
-            builder.Configuration["EmailSettings:SmtpUsername"],
-            builder.Configuration["EmailSettings:SmtpPassword"]
-        ),
-        EnableSsl = true,
-    };
+        var builder = WebApplication.CreateBuilder(args);
 
-    return new SmtpEmailService(smtpClient);
-});
-//builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
+        var emailConfig = builder.Configuration
+                .GetSection("EmailSettings")
+                .Get<EmailConfiguration>();
+        builder.Services.AddSingleton(emailConfig);
 
 
+        // Add services to the container.
+        builder.Services.AddControllersWithViews();
+        //builder.Services.AddMvc(options =>
+        //{
+        //    options.CacheProfiles.Add("NoCache", new CacheProfile { NoStore = true, Duration = 0 });
+        //});
 
+        builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+        builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+        builder.Services.AddScoped<IPolicyService, PolicyService>();
+        builder.Services.AddScoped<IEmailSender, SmtpEmailService>();
 
+        builder.Services.AddDbContext<ApplicationDbContext>
+            (Options => Options.UseSqlServer
+            (builder.Configuration.GetConnectionString("DefaultConnection")));
+        builder.Services.AddIdentity<ApplicationUser, IdentityRole>().AddEntityFrameworkStores<ApplicationDbContext>()
+        .AddDefaultTokenProviders();
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddAuthorization(AuthorizationPolicies.ConfigurePolicies);
 
-builder.Services.AddSession(option => {
-    option.IOTimeout = TimeSpan.FromDays(10);
-    option.Cookie.HttpOnly = true;
-    option.Cookie.IsEssential = true;
-});
+        builder.Services.AddNotyf(config => { config.DurationInSeconds = 5; config.IsDismissable = true; config.Position = NotyfPosition.BottomRight; });
+        var app = builder.Build();
 
-var app = builder.Build();
+        // Configure the HTTP request pipeline.
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseExceptionHandler("/Home/Error");
+            // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+            app.UseHsts();
+        }
 
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
+        app.UseHttpsRedirection();
+        app.UseStaticFiles();
+
+        app.UseRouting();
+        app.UseAuthentication();
+        //app.UseMiddleware<PermissionMiddleware>();
+        app.UseAuthorization();
+        app.UseNotyf();
+
+        app.MapControllerRoute(
+            name: "default",
+            pattern: "{controller=Home}/{action=Index}/{id?}");
+
+        app.Run();
+    }
 }
-
-app.UseHttpsRedirection();
-app.UseStaticFiles();
-
-app.UseRouting();
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.UseSession();
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Account}/{action=Login}/{id?}");
-
-app.Run();

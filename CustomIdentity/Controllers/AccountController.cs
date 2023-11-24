@@ -8,7 +8,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using NETCore.MailKit.Core;
+using NuGet.Common;
+//using NETCore.MailKit.Core;
 using System.Net.Mail;
+using System.Text;
 
 namespace CustomIdentity.Controllers
 {
@@ -18,12 +22,12 @@ namespace CustomIdentity.Controllers
         SignInManager<ApplicationUser> _signInManager;
         UserManager<ApplicationUser> _userManager;
         RoleManager<IdentityRole> _roleManager;
-        private readonly IEmailService emailService;
+        private readonly IEmailSender emailService;
 
         public AccountController(ApplicationDbContext dbContext,
         SignInManager<ApplicationUser> signInManager,
         UserManager<ApplicationUser> userManager,
-        RoleManager<IdentityRole> roleManager,IEmailService _emailService)
+        RoleManager<IdentityRole> roleManager, IEmailSender _emailService)
         {
             this.dbContext = dbContext;
             _signInManager = signInManager;
@@ -40,23 +44,26 @@ namespace CustomIdentity.Controllers
             return View();
         }
         [HttpPost]
+        [AllowAnonymous]
         public async Task<IActionResult> Login(LoginModel loginModel)
         {
             if (ModelState.IsValid)
             {
-                var result = await _signInManager.PasswordSignInAsync(loginModel.Email, loginModel.Password, loginModel.RememberMe, false);
-                if (result.Succeeded)
+                var user = await _userManager.FindByNameAsync(loginModel.Email);
+                if(user != null)
                 {
-                    var user = await _userManager.FindByNameAsync(loginModel.Email);
-                    HttpContext.Session.SetString("userName", user.Name);
-                    return RedirectToAction("Index", "Home");
+                    var result = await _signInManager.PasswordSignInAsync(loginModel.Email, loginModel.Password, loginModel.RememberMe, true);
+                    if (result.Succeeded)
+                    {
+                        return RedirectToAction("Index", "Home");
+                    }
                 }
             }
             ModelState.AddModelError("", "Invalid Login attempt");
             return View(loginModel);
         }
 
-        [Authorize(policy: "FullAdminAccess")]
+        [Authorize(policy: "CreateUserRights")]
         public async Task<IActionResult> Register()
         {
             if (!_roleManager.RoleExistsAsync(Helper.Admin).GetAwaiter().GetResult())
@@ -80,7 +87,7 @@ namespace CustomIdentity.Controllers
         }
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [Authorize(policy: "FullAdminAccess")]
+        [Authorize(policy: "CreateUserRights")]
         public async Task<IActionResult> RegisterAsync(string? id, RegisterModel registerModel)
         {
             if (ModelState.IsValid)
@@ -152,7 +159,7 @@ namespace CustomIdentity.Controllers
         }
 
         [HttpGet]
-        public IActionResult User()
+        public async Task<IActionResult> User()
         {
             var users = _userManager.Users.Select(u => new UserListVM
             {
@@ -165,11 +172,11 @@ namespace CustomIdentity.Controllers
             return View(users);
         }
         [HttpGet]
-        [Authorize(policy: "AdminAccess")]
+        [Authorize(policy: "EditUserRights")]
         public IActionResult EditUser(string id)
         {
             var user = _userManager.FindByIdAsync(id).Result;
-            
+
 
             if (user != null)
             {
@@ -183,7 +190,7 @@ namespace CustomIdentity.Controllers
             return RedirectToAction("Index");
         }
         [HttpGet]
-        [Authorize(policy: "FullAdminAccess")]
+        [Authorize(policy: "DeleteUserRights")]
         public async Task<IActionResult> DeleteUser(string id)
         {
             var user = await _userManager.FindByIdAsync(id);
@@ -197,7 +204,7 @@ namespace CustomIdentity.Controllers
         }
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [Authorize(policy: "FullAdminAccess")]
+        [Authorize(policy: "DeleteUserRights")]
         public async Task<IActionResult> DeleteConfirmed(string userId)
         {
             var user = await _userManager.FindByIdAsync(userId);
@@ -223,7 +230,7 @@ namespace CustomIdentity.Controllers
                 return View("DeleteUser", user);
             }
         }
-
+        [AllowAnonymous]
         public async Task<IActionResult> ForgotPassword()
         {
             return View();
@@ -231,6 +238,7 @@ namespace CustomIdentity.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AllowAnonymous]
         public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
         {
             if (ModelState.IsValid)
@@ -243,23 +251,35 @@ namespace CustomIdentity.Controllers
 
                     var resetLink = Url.Action("ResetPassword", "Account", new { userId = user.Id, token }, Request.Scheme);
 
-                    ForgotPasswordConfirmation(resetLink);
+                    var emailBuilder = new StringBuilder();
+                    emailBuilder.Append("<html>");
+                    emailBuilder.Append("<body>");
+
+                    emailBuilder.Append($"Dear {user.Name} !");
+                    emailBuilder.Append("<br/>");
+                    emailBuilder.Append($"Password Reset Link for {user.UserName} is here: ");
+                    emailBuilder.Append($"<a href='{resetLink}'>Reset Password</a>");
+                    emailBuilder.Append("</body>");
+                    emailBuilder.Append("</html>");
+
+                    string emailBody = emailBuilder.ToString();
+
+                    var message = new Message(new string[] { user.Email }, "Password Recovery", emailBody);
+                    emailService.SendEmail(message);
+
+                    ViewBag.ResetLink = resetLink;
+                    return View("ForgotPasswordConfirmation");
                 }
                 else
                 {
                     ViewBag.ErrorMessage = "No User Found with email you provided";
-                    return View();
+                    return View("ForgotPasswordConfirmation");
                 }
             }
 
             return View(model);
         }
-        [Authorize]
-        public IActionResult ForgotPasswordConfirmation(string resetLink)
-        {
-            ViewBag.ResetLink = resetLink;
-            return View();
-        }
+        [AllowAnonymous]
         public IActionResult ResetPassword(string userId, string token)
         {
             var model = new ResetPasswordViewModel
@@ -273,6 +293,7 @@ namespace CustomIdentity.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AllowAnonymous]
         public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
         {
             if (ModelState.IsValid)
@@ -301,6 +322,7 @@ namespace CustomIdentity.Controllers
 
             return View(model);
         }
+        [AllowAnonymous]
         public IActionResult AccessDenied()
         {
             return View();

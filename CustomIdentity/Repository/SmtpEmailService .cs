@@ -1,30 +1,53 @@
 ﻿using CustomIdentity.Models;
-using System.Net.Mail;
+using MailKit.Net.Smtp;
+using MimeKit;
 
 namespace CustomIdentity.Repository
 {
-    public class SmtpEmailService : IEmailService
+    public class SmtpEmailService : IEmailSender
     {
-        private readonly SmtpClient _smtpClient;
-
-        public SmtpEmailService(SmtpClient smtpClient)
+        private readonly EmailConfiguration _emailConfig;
+        public SmtpEmailService(EmailConfiguration emailConfig)
         {
-            _smtpClient = smtpClient;
+            _emailConfig = emailConfig;
+        }
+        public void SendEmail(Message message)
+        {
+            var emailMessage = CreateEmailMessage(message);
+            Send(emailMessage);
         }
 
-        public async Task SendEmailAsync(EmailMessage message)
+        private MimeMessage CreateEmailMessage(Message message)
         {
-            var mailMessage = new MailMessage
+            var emailMessage = new MimeMessage();
+            emailMessage.From.Add(new MailboxAddress(_emailConfig.From,_emailConfig.UserName));
+            emailMessage.To.AddRange(message.To);
+            emailMessage.Subject = message.Subject;
+            emailMessage.Body = new TextPart(MimeKit.Text.TextFormat.Html) { Text = message.Content };
+            return emailMessage;
+        }
+        private void Send(MimeMessage mailMessage)
+        {
+            using (var client = new SmtpClient())
             {
-                From = new MailAddress(message.From, "TestName"),
-                Subject = message.Subject,
-                Body = message.Content,
-                IsBodyHtml = true
-            };
-
-            mailMessage.To.Add(new MailAddress(message.To));
-
-            await _smtpClient.SendMailAsync(mailMessage);
+                try
+                {
+                    client.Connect(_emailConfig.SmtpServer, _emailConfig.Port, true);
+                    client.AuthenticationMechanisms.Remove("XOAUTH2");
+                    client.Authenticate(_emailConfig.UserName, _emailConfig.Password);
+                    client.Send(mailMessage);
+                }
+                catch(Exception ex)
+                {
+                    //log an error message or throw an exception or both.
+                    throw ex;
+                }
+                finally
+                {
+                    client.Disconnect(true);
+                    client.Dispose();
+                }
+            }
         }
     }
 

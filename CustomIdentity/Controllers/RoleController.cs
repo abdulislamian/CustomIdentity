@@ -1,27 +1,44 @@
-﻿using CustomIdentity.Data;
+﻿using AspNetCoreHero.ToastNotification.Abstractions;
+using CustomIdentity.Data;
 using CustomIdentity.Models;
+using CustomIdentity.Models.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CustomIdentity.Controllers
 {
-    [Authorize(Policy = "FullAdminAccess")]
+    [Authorize(policy: "FullAdminAccess")]
     public class RoleController : Controller
     {
         private RoleManager<IdentityRole> _roleManager;
         private readonly UserManager<ApplicationUser> userManager;
+        private readonly INotyfService _notyf;
 
-        public RoleController(RoleManager<IdentityRole> roleManager,UserManager<ApplicationUser> _userManager)
+        public RoleController(RoleManager<IdentityRole> roleManager,UserManager<ApplicationUser> _userManager, INotyfService notyf)
         {
             _roleManager = roleManager;
             userManager = _userManager;
+            _notyf = notyf;
         }
 
         public IActionResult Index()
         {
             var roles = _roleManager.Roles.ToList();
-            return View(roles);
+            var userWithRoles = new List<RoleVM>();
+            foreach (var role in roles)
+            {
+                var userCount = userManager.GetUsersInRoleAsync(role.Name).Result.Count;
+
+                var roleViewModel = new RoleVM()
+                {
+                    Role = role,
+                    UserCount = userCount
+                };
+
+                userWithRoles.Add(roleViewModel);
+            }
+            return View(userWithRoles);
         }
 
         public IActionResult Create()
@@ -36,6 +53,7 @@ namespace CustomIdentity.Controllers
             if (ModelState.IsValid)
             {
                 await _roleManager.CreateAsync(role);
+                _notyf.Success($"Role :{role.Name} Created Successfully.", 3);
                 return RedirectToAction("Index");
             }
             return View(role);
@@ -62,6 +80,7 @@ namespace CustomIdentity.Controllers
                 {
                     role.Name = model.Name;
                     await _roleManager.UpdateAsync(role);
+                    _notyf.Information($"Role {role.Name} Updated Successfully.", 4);
                     return RedirectToAction("Index");
                 }
             }
@@ -75,10 +94,10 @@ namespace CustomIdentity.Controllers
         public IActionResult Delete(string id)
         {
             var role = _roleManager.FindByIdAsync(id).Result;
-            if(role.Name == CustomIdentity.Utilities.Helper.Admin)
+            if(role.Name == CustomIdentity.Utilities.Helper.SuperAdmin)
             {
-                ModelState.AddModelError("", "Admin Role is not allowed to delete");
-                return View(ModelState);
+                TempData["RoleError"] = "Super Admin Role is not allowed to delete";
+                return RedirectToAction(nameof(Index));
             }
             if (role != null)
             {
@@ -96,7 +115,8 @@ namespace CustomIdentity.Controllers
 
             if (usersInRole.Any())
             {
-                ModelState.AddModelError("", "Cannot delete the role. Users are assigned to it.");
+                TempData["RoleError"] = $"Cannot delete the role {role.Name}. Users are assigned to it.";
+                _notyf.Warning(TempData["RoleError"].ToString());
                 return RedirectToAction(nameof(Index));
             }
 
@@ -104,7 +124,9 @@ namespace CustomIdentity.Controllers
             var result = await _roleManager.DeleteAsync(await _roleManager.FindByNameAsync(role.Name));
 
             if (result.Succeeded)
-            {   
+            {
+                TempData["RoleError"] = $"Role {role.Name} Deleted Successfully";
+                _notyf.Error(TempData["RoleError"].ToString());
                 return RedirectToAction("Index");
             }
             else
@@ -125,6 +147,7 @@ namespace CustomIdentity.Controllers
             if (user == null)
             {
                 ViewBag.ErrorMessage = $"User with Id = {id} cannot be found";
+                _notyf.Warning($"User with Id = {id} cannot be found");
                 return View("NotFound");
             }
             ViewBag.UserName = user.UserName;
@@ -162,12 +185,14 @@ namespace CustomIdentity.Controllers
             if (!result.Succeeded)
             {
                 ModelState.AddModelError("", "Cannot remove user existing roles");
+                _notyf.Warning("Cannot remove user existing roles");
                 return View(model);
             }
             result = await userManager.AddToRolesAsync(user, model.Where(x => x.Selected).Select(y => y.RoleName));
             if (!result.Succeeded)
             {
                 ModelState.AddModelError("", "Cannot add selected roles to user");
+                _notyf.Warning("Cannot add selected roles to user");
                 return View(model);
             }
             return RedirectToAction("User","Account");

@@ -1,0 +1,72 @@
+﻿@using CustomIdentity.Models.PermissionModel.ViewModel;
+@model PermissionViewModel
+@{
+    ViewData["Title"] = "Index";
+}
+
+<h1>Permissions</h1>
+<br />
+<div class="card">
+    <div id="viewAll" class="card-body table-responsive">
+        <form asp-controller="permission" method="post" asp-action="Update" class="d-inline">
+            <input asp-for="@Model.RoleId" type="hidden" />
+            <table class="table table-striped" id="permissionTable">
+                <thead>
+                    <tr>
+                        <th>
+                            Category
+                        </th>
+                        <th>
+                            Type
+                        </th>
+                        <th>
+                            Permission
+                        </th>
+                        <th>
+                            Status
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (int categoryIndex = 0; categoryIndex < Model.Categories.Count; categoryIndex++)
+                    {
+                        var category = Model.Categories[categoryIndex];
+                        <tr>
+                            <td colspan="4" class="font-weight-bold text-center bg-black text-white">@category.CategoryName</td>
+                        </tr>
+                        for (int permissionIndex = 0; permissionIndex < category.Permissions.Count; permissionIndex++)
+                        {
+                            var permission = category.Permissions[permissionIndex];
+                            <tr>
+                                <td></td>
+                                <td>
+                                    <input asp-for="@Model.Categories[categoryIndex].Permissions[permissionIndex].Type" type="hidden" />
+                                    @Model.Categories[categoryIndex].Permissions[permissionIndex].Type
+                                </td>
+                                <td>
+                                    <input asp-for="@Model.Categories[categoryIndex].Permissions[permissionIndex].Value" type="hidden" />
+                                    @Model.Categories[categoryIndex].Permissions[permissionIndex].Value
+                                </td>
+                                <td>
+                                    <div class="form-check m-1">
+                                        <input asp-for="@Model.Categories[categoryIndex].Permissions[permissionIndex].Selected" class="form-check-input" />
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+
+                </tbody>
+            </table>
+            <div class="col-sm-12" style="padding: 20px 20px 0px 0px">
+                <button type="submit" id="save" class="btn btn-success">
+                    <i class="fa fa-check"></i>
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+

@@ -1,6 +1,14 @@
-﻿@using Microsoft.AspNetCore.Identity;
-@model List<IdentityRole>
+﻿@using CustomIdentity.Models.ViewModels;
+@using Microsoft.AspNetCore.Authorization;
+@inject IAuthorizationService AuthorizationService
+@model List<RoleVM>
 
+@{
+    if (@TempData["RoleError"] != null)
+    {
+        <h4 class="text-danger">@TempData["RoleError"]</h4>
+    }
+}
 <div class="row">
     <div class="col-6">
         <h2>Roles</h2>
@@ -9,34 +17,52 @@
         <a asp-action="Create" asp-controller="Role" class="btn btn-success" style="float:right;">Create Role</a>
     </div>
 </div>
-<table class="table">
+<table class="table table-bordered table-striped">
     <thead>
         <tr>
             <th>Name</th>
+            <th>Users</th>
             <th>Actions</th>
         </tr>
     </thead>
     <tbody>
-        @if(Model !=null){
+        @if (Model != null)
+        {
             @foreach (var role in Model)
             {
                 <tr>
-                    <td>@role.Name</td>
+                    <td>@role.Role.Name</td>
+                    <td>@role.UserCount</td>
                     <td>
-                        <a asp-action="Edit" asp-route-id="@role.Id" class="btn btn-info">Edit</a> |
-                        @*<a asp-action="Delete" asp-controller="Role" asp-route-id="@role.Id" class="btn btn-danger">Delete</a>*@
-                        <a class="btn btn-danger text-white" asp-action="Delete" asp-route-Id="@role.Id" 
-                        onsubmit="return confirm('Are you sure you want to delete this role?');" >
-                            Delete
-                        </a>
+                        <div class="btn-group">
+                            <a asp-action="Edit" asp-route-id="@role.Role.Id" class="btn btn-info">Edit</a>
+
+                            <a class="btn btn-danger text-white" asp-action="Delete" asp-route-Id="@role.Role.Id" onsubmit="return confirm('Are you sure you want to delete this role?');">Delete</a>
+
+                            @if (role.Role.Name != "SuperAdmin")
+                            {
+                                <div class="dropdown">
+                                    <button class="btn btn-secondary dropdown-toggle" type="button" id="Permission" data-bs-toggle="dropdown" aria-expanded="false">
+                                        Permissions
+                                    </button>
+                                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
+                                        <li>
+                                            <a asp-controller="Permission" asp-action="Index" asp-route-id="@role.Role.Id" class="dropdown-item">Manage Permission</a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            }
+                        </div>
+
                     </td>
                 </tr>
             }
-        }else{
-           <tr><td>
-               No data to show
-           </td></tr>
         }
-
+        else
+        {
+            <tr>
+                <td colspan="3">No data to show</td>
+            </tr>
+        }
     </tbody>
 </table>

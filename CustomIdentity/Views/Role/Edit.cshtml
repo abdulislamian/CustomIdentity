@@ -5,9 +5,19 @@
 <form asp-action="Edit">
     <input type="hidden" asp-for="@Model.Id" />
     <div class="form-group">
-        <label asp-for="@Model.Name">Role Name</label>
-        <input asp-for="@Model.Name" class="form-control" />
-        <span asp-validation-for="@Model.Name" class="text-danger"></span>
+        @if (Model.Name == CustomIdentity.Utilities.Helper.SuperAdmin)
+        {
+            <label asp-for="@Model.Name">Role Name</label>
+            <input asp-for="@Model.Name" class="form-control" disabled/>
+            <span asp-validation-for="@Model.Name" class="text-danger"></span>
+        }
+        else
+        {
+            <label asp-for="@Model.Name">Role Name</label>
+            <input asp-for="@Model.Name" class="form-control" />
+            <span asp-validation-for="@Model.Name" class="text-danger"></span>
+        }
+
     </div>
     <br/>
     <button type="submit" class="btn btn-primary">Save Changes</button>

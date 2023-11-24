@@ -2,6 +2,14 @@
 
 
 <h2>Sign In</h2>
+@if (@TempData["LoginError"] != null)
+{
+    <div class="alert alert-danger" role="alert">
+        @TempData["LoginError"]
+    </div>
+}
+
+
 <div class="row">
     <div class="col-md-8">
         <section id="loginForm">
@@ -42,6 +50,6 @@
 
 @section Scripts{
     @{
-        <partial name="_validationscriptspartial" />
+    <partial name="_validationscriptspartial" />
     }
 }
